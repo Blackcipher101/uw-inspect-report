@@ -147,15 +147,15 @@ def main(argv=None):
     faith = faithfulness.check_report(summary, findings, vlm)
 
     tum = None if cov["traj_file"] == "none" else load_tum(cov["traj_file"])
-    track_xz = []
+    track_xy = []
     if tum is not None:
         m = (tum[:, 0] >= cov["t_start"]) & (tum[:, 0] <= cov["t_end"])
-        track_xz = [(float(r[1]), float(r[3])) for r in tum[m][:: max(1, int(m.sum() // 400))]]
+        track_xy = [(float(r[1]), float(r[2])) for r in tum[m][:: max(1, int(m.sum() // 400))]]
     meta = {"source": a.source_name or str(Path(json.load(open(src / "keyframes.json"))["bag"]).name),
             "detector": json.load(open(src / "detections.json"))["model"], "vlm": a.vlm + (" (context verifier)" if a.verify_context else ""), "thr": fj["thr"], "mode": fj["mode"]}
     json.dump({"summary": summary, "per_finding": vlm, "faithfulness": faith, "meta": meta}, open(out / "vlm_outputs.json", "w"), indent=1)
     (out / "report.md").write_text(render_md(meta, cov, findings, vlm, summary, faith))
-    (out / "report.html").write_text(render_html(meta, cov, findings, vlm, summary, faith, src, track_xz))
+    (out / "report.html").write_text(render_html(meta, cov, findings, vlm, summary, faith, src, track_xy))
     print(f"[report] wrote report.md/html; hallucinated statements = {faith['n_hallucinated']}", flush=True)
 
 

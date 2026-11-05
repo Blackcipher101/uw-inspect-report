@@ -49,22 +49,22 @@ def status_of(vlm: dict) -> str:
     return vlm.get("status", "confirmed")
 
 
-def plan_svg(track_xz: list[tuple[float, float]], findings: list[dict], size: int = 360) -> str:
-    pts = list(track_xz) + [(f["xyz_world"][0], f["xyz_world"][2]) for f in findings if f["xyz_world"]]
+def plan_svg(track_xy: list[tuple[float, float]], findings: list[dict], size: int = 360) -> str:
+    pts = list(track_xy) + [(f["xyz_world"][0], f["xyz_world"][1]) for f in findings if f["xyz_world"]]
     if len(pts) < 2:
         return ""
-    xs, zs = [p[0] for p in pts], [p[1] for p in pts]
-    x0, x1, z0, z1 = min(xs), max(xs), min(zs), max(zs)
-    span = max(x1 - x0, z1 - z0, 1e-6)
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    span = max(x1 - x0, y1 - y0, 1e-6)
     m = 20
 
-    def tf(x, z):
-        return m + (x - x0) / span * (size - 2 * m), size - m - (z - z0) / span * (size - 2 * m)
+    def tf(x, y):
+        return m + (x - x0) / span * (size - 2 * m), size - m - (y - y0) / span * (size - 2 * m)
 
-    line = " ".join(f"{tf(*p)[0]:.1f},{tf(*p)[1]:.1f}" for p in track_xz)
+    line = " ".join(f"{tf(*p)[0]:.1f},{tf(*p)[1]:.1f}" for p in track_xy)
     dots = "".join(
-        f'<circle cx="{tf(f["xyz_world"][0], f["xyz_world"][2])[0]:.1f}" cy="{tf(f["xyz_world"][0], f["xyz_world"][2])[1]:.1f}" r="4" fill="red"/>'
-        f'<text x="{tf(f["xyz_world"][0], f["xyz_world"][2])[0] + 5:.1f}" y="{tf(f["xyz_world"][0], f["xyz_world"][2])[1] - 5:.1f}" font-size="9">{f["id"]}</text>'
+        f'<circle cx="{tf(f["xyz_world"][0], f["xyz_world"][1])[0]:.1f}" cy="{tf(f["xyz_world"][0], f["xyz_world"][1])[1]:.1f}" r="4" fill="red"/>'
+        f'<text x="{tf(f["xyz_world"][0], f["xyz_world"][1])[0] + 5:.1f}" y="{tf(f["xyz_world"][0], f["xyz_world"][1])[1] - 5:.1f}" font-size="9">{f["id"]}</text>'
         for f in findings if f["xyz_world"]
     )
     return (f'<svg width="{size}" height="{size}" style="border:1px solid #999;background:#fafafa">'
@@ -104,7 +104,7 @@ def render_md(meta: dict, cov: dict, findings: list[dict], vlm: dict, summary: s
     return "\n".join(L)
 
 
-def render_html(meta, cov, findings, vlm, summary, faith, out_dir: Path, track_xz) -> str:
+def render_html(meta, cov, findings, vlm, summary, faith, out_dir: Path, track_xy) -> str:
     e = html.escape
     rows = []
     for f, v in _rows(findings, vlm):
@@ -123,7 +123,7 @@ td,th{{border:1px solid #bbb;padding:4px;font-size:13px;vertical-align:top}} .ba
 <h2>Coverage</h2><ul><li>Source: <code>{e(meta['source'])}</code></li>
 <li>Duration {cov['duration_s']:.0f} s; keyframes {cov['n_keyframes']} ({cov['n_keyframes_with_pose']} with pose); track length {trk} (VIO: <code>{e(cov['traj_file'])}</code>)</li>
 <li>Detector {e(meta['detector'])}; VLM {e(meta['vlm'])}; threshold {meta['thr']} ({meta['mode']} prompts)</li></ul>
-{plan_svg(track_xz, findings)}<p><small>Plan view: VIO world x (horizontal) vs z (vertical); blue = camera track, red = findings.</small></p>
+{plan_svg(track_xy, findings)}<p><small>Plan view: VIO world x (horizontal) vs y (vertical), world z-up; blue = camera track, red = findings.</small></p>
 <h2>Findings</h2><p>Positions: VIO world frame (m). Sizes: approximate stereo box extent.</p>
 <table><tr><th>ID</th><th>Crop</th><th>Type</th><th>Status</th><th>Location x,y,z (m)</th><th>Size</th><th>Conf.</th><th>Obs.</th><th>Frames</th><th>Severity (AI suggestion)</th><th>Assessment</th></tr>
 {''.join(rows)}</table>

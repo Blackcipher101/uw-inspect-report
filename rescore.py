@@ -28,14 +28,14 @@ def main(argv=None):
     v = json.load(open(run / "vlm_outputs.json"))
     v["faithfulness"] = faithfulness.check_report(v["summary"], findings, v["per_finding"])
     json.dump(v, open(run / "vlm_outputs.json", "w"), indent=1)
-    track_xz = []
+    track_xy = []
     if cov["traj_file"] != "none" and Path(cov["traj_file"]).exists():
         tum = load_tum(cov["traj_file"])
         m = (tum[:, 0] >= cov["t_start"]) & (tum[:, 0] <= cov["t_end"])
-        track_xz = [(float(r[1]), float(r[3])) for r in tum[m][:: max(1, int(m.sum() // 400))]]
+        track_xy = [(float(r[1]), float(r[2])) for r in tum[m][:: max(1, int(m.sum() // 400))]]
     f = {k: v["faithfulness"][k] for k in ("n_hallucinated", "summary_only_hallucinated", "assessment_hallucinated", "n_confirmed", "count_claim_errors")}
     (run / "report.md").write_text(render_md(v["meta"], cov, findings, v["per_finding"], v["summary"], v["faithfulness"]))
-    (run / "report.html").write_text(render_html(v["meta"], cov, findings, v["per_finding"], v["summary"], v["faithfulness"], src, track_xz))
+    (run / "report.html").write_text(render_html(v["meta"], cov, findings, v["per_finding"], v["summary"], v["faithfulness"], src, track_xy))
     print(run, f)
 
 
