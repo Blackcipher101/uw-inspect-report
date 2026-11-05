@@ -7,6 +7,38 @@ All numbers below are from ONE run on the AFRL `bus_outside` bag (sunken bus, mu
 Poses: uw_ct_vio `s4_rep.tum` (left-camera pose; 198 keyframes all with pose, 64.5 m track, 585 s).
 Example report: `examples/report.html` / `examples/report.md` (context verifier run). It is an AI draft and is imperfect (see below).
 
+## Figures
+
+![Keyframes with detections coloured by verifier status](docs/figures/hero_findings.jpg)
+
+*Real keyframes from `bus_outside` with the detector box of six findings (best frame of each). Top row: tire F01, window F15 and marine growth F18, confirmed by the v1 verifier and judged true by the annotator. Bottom row: failure cases: two crack candidates (F20, F26) that the annotator judged not cracks (thin line-like structures in open water; v1 left them unclear) and F27, a debris false positive that v1 confirmed. Single AI annotator, small labelled set, murky lake scene.*
+
+![Pipeline](docs/figures/pipeline.png)
+
+*Pipeline stages (see "Stages and files" below).*
+
+![Top-down map of findings](docs/figures/map_findings.png)
+
+*VIO track (64.5 m, 585 s) with the 23 of the top 30 findings that have a valid stereo depth; filled green = confirmed by v1, hollow orange = unclear. VIO world frame, not gravity aligned. Single AI annotator, small labelled set, murky lake scene.*
+
+![Detector precision and recall](docs/figures/detector_pr.png)
+
+*Left: micro precision/recall vs score threshold (base and ens prompts), image level over 40 labelled frames. Right: per-class precision/recall at 0.15 (ens); crack and fish have no labelled positives. Same numbers as the tables below.*
+
+![Verifier v0 vs v1](docs/figures/verifier_comparison.png)
+
+*Crop-only (v0) vs frame-context (v1) verifier on the 17 usable labelled crops (8 true). Same numbers as the verifier table below; the labelled set is tiny and v1 was chosen on it.*
+
+![Example report screenshot](docs/figures/example_report.jpg)
+
+*Top of `examples/report.html` (headless Chrome screenshot): AI-draft banner, summary, coverage and the findings table. The summary's "10 confirmed" is wrong (20 confirmed), which the faithfulness check flags.*
+
+Regenerate all figures from the saved outputs (needs the stage-1 rectified keyframe JPEGs, which are not in the repo, and the VIO trajectory):
+```
+python3 make_figures.py --kf-dir <dir with kf_NNNN_left.jpg> --traj <s4_rep.tum> [--out docs/figures]
+```
+Requires matplotlib, opencv-python, numpy, pillow; the report screenshot additionally needs `google-chrome` (skipped if absent).
+
 ## Results (bus_outside, self-labelled, indicative only)
 
 Labels: one AI annotator (me), 40 frames evenly sampled from the 198 keyframes (`labels.json`; unsure (frame, class) pairs
