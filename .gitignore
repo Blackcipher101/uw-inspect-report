@@ -1,0 +1,5 @@
+.venv/
+label_frames/
+out/
+__pycache__/
+.pytest_cache/
