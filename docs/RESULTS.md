@@ -1,0 +1,106 @@
+# Figures and results (details)
+
+[Back to README](../README.md)
+
+Research prototype. Pipeline: keyframes (+VIO pose) -> OWLv2 open-vocabulary detection -> stereo SGBM depth,
+3D position and metric size in the VIO world frame, cross-frame merge -> local VLM verifies each finding and
+writes assessments + summary -> markdown/HTML report -> baseline evaluation.
+All numbers below are from ONE run on the AFRL `bus_outside` bag (sunken bus, murky lake) on an RTX 5080 (ws1).
+Poses: uw_ct_vio `s4_rep.tum` (left-camera pose; 198 keyframes all with pose, 64.5 m track, 585 s).
+Example report: `examples/report.html` / `examples/report.md` (context verifier run). It is an AI draft and is imperfect (see below).
+
+## Figures
+
+![Keyframes with detections coloured by verifier status](figures/hero_findings.jpg)
+
+*Real keyframes from `bus_outside` with the detector box of six findings (best frame of each). Top row: tire F01, window F15 and marine growth F18, confirmed by the v1 verifier and judged true by the annotator. Bottom row: failure cases: two crack candidates (F20, F26) that the annotator judged not cracks (thin line-like structures in open water; v1 left them unclear) and F27, a debris false positive that v1 confirmed. Single AI annotator, small labelled set, murky lake scene.*
+
+![Pipeline](figures/pipeline.png)
+
+*Pipeline stages (see "Stages and files" below).*
+
+![Top-down map of findings](figures/map_findings.png)
+
+*VIO track (64.5 m, 585 s) with the 23 of the top 30 findings that have a valid stereo depth; filled green = confirmed by v1, hollow orange = unclear. VIO world frame, not gravity aligned. Single AI annotator, small labelled set, murky lake scene.*
+
+![Detector precision and recall](figures/detector_pr.png)
+
+*Left: micro precision/recall vs score threshold (base and ens prompts), image level over 40 labelled frames. Right: per-class precision/recall at 0.15 (ens); crack and fish have no labelled positives. Same numbers as the tables below.*
+
+![Verifier v0 vs v1](figures/verifier_comparison.png)
+
+*Crop-only (v0) vs frame-context (v1) verifier on the 17 usable labelled crops (8 true). Same numbers as the verifier table below; the labelled set is tiny and v1 was chosen on it.*
+
+![Example report screenshot](figures/example_report.jpg)
+
+*Top of `examples/report.html` (headless Chrome screenshot): AI-draft banner, summary, coverage and the findings table. The summary's "10 confirmed" is wrong (20 confirmed), which the faithfulness check flags.*
+
+Regenerate all figures from the saved outputs (needs the stage-1 rectified keyframe JPEGs, which are not in the repo, and the VIO trajectory):
+```
+python3 make_figures.py --kf-dir <dir with kf_NNNN_left.jpg> --traj <s4_rep.tum> [--out docs/figures]
+```
+Requires matplotlib, opencv-python, numpy, pillow; the report screenshot additionally needs `google-chrome` (skipped if absent).
+
+## Results (bus_outside, self-labelled, indicative only)
+
+Labels: one AI annotator (me), 40 frames evenly sampled from the 198 keyframes (`labels.json`; unsure (frame, class) pairs
+excluded) and 30 finding crops (13 unsure, 17 usable). No human cross-check. Positives are tiny for some classes.
+
+### Detector (OWLv2-base, image level, threshold 0.15; `base` = first prompt, `ens` = max over 3 prompts per class)
+| class | support (frames) | base P | base R | ens P | ens R | ens FP |
+|---|---|---|---|---|---|---|
+| corrosion | 6 | - | 0.00 | 0.40 | 0.33 | 3 |
+| marine_growth | 29 | 1.00 | 0.41 | 1.00 | 0.59 | 0 |
+| crack | 0 | 0.00 | - | 0.00 | - | 17 |
+| hole_damage | 1 | 0.00 | 0.00 | 0.00 | 0.00 | 12 |
+| debris | 3 | 0.50 | 0.67 | 0.43 | 1.00 | 4 |
+| fish | 0 | 0.00 | - | 0.00 | - | 16 |
+| rope_cable | 12 | 1.00 | 0.42 | 1.00 | 0.67 | 0 |
+| metal_structure | 33 | 1.00 | 0.06 | 1.00 | 0.12 | 0 |
+| window | 7 | 0.75 | 0.86 | 0.75 | 0.86 | 2 |
+| tire | 10 | 1.00 | 0.20 | 1.00 | 0.20 | 0 |
+| **micro** | | 0.49 | 0.29 | 0.44 | 0.42 | |
+
+Threshold sweep (micro, ens): thr 0.05 P 0.35 / R 0.74; 0.10 P 0.43 / R 0.59; 0.15 P 0.44 / R 0.42; 0.20 P 0.50 / R 0.30; 0.30 P 0.54 / R 0.15; 0.40 P 0.86 / R 0.06.
+Full tables: `run_bus/metrics.md`. Reading: precision is high for the common classes (marine_growth, rope_cable,
+metal_structure, tire, window) but recall is low (metal_structure R 0.12 although the bus is in 33/40 frames).
+Defect prompts are poor: crack (17 FP frames) and fish (16 FP) have no true positives in this set (the scene has no crack/fish that I could see), hole_damage 12 FP,
+corrosion P 0.40 / R 0.33 (ens only; base found none). Prompt ensembling raised micro recall 0.29 -> 0.42 at a small precision cost (0.49 -> 0.44), measured on detector output only.
+The report pipeline itself ran with `base` prompts (findings come from `base`, thr 0.15); I did not run the full pipeline with `ens`.
+Findings are ranked by raw detector score, so the top 30 are dominated by crack/fish false positives plus seabed "marine growth".
+
+### VLM verifier (Qwen3-VL-4B-Instruct) on the 30 finding crops (17 with usable labels; detector crop precision = 8/17 = 0.47)
+| verifier | confirmed (of 30) | recall of true crops | precision after filter | accuracy (confirm vs not) | faithfulness flags |
+|---|---|---|---|---|---|
+| v0: crop only, true/false (default) | 0 | 0/8 = 0.00 | undefined (kept none) | 9/17 = 0.53 | 0 |
+| v1: `--verify-context` (boxed keyframe + crop, yes/no/unclear) | 20 (10 unclear) | 8/8 = 1.00 | 8/9 = 0.89 | 16/17 = 0.94 | 5 |
+
+v0 rejected every crop, including obvious tires, windows and marine growth, so the cure was worse than the disease; v1 confirmed all 8 true crops and
+left all but one false crop (F27 debris) unconfirmed/unclear. Caveats: 17 labelled crops only; the 12 confirmed crops I could not label
+(fish blobs, seabed algae, a porthole ring called hole_damage with severity medium, a debris blob in glare) are unscored, so the true precision of v1 is unknown; the
+accuracy for v1 treats "unclear" as "not confirmed". Selection of v1 over v0 is based on this same small set (it was the single pre-declared change, not tuned further).
+
+### Faithfulness (lexical; `faithfulness.check_report`)
+Counts: unknown finding ids; citing a finding the verifier did not confirm; a class mentioned (not negated) with no confirmed finding of that class;
+class mentioned that differs from the cited finding's class; a stated "N confirmed findings" that is wrong. Assessments of unconfirmed findings are not checked (they are the rejection rationale).
+- Original baseline run (before the consistency fix): the summary listed 14 findings the verifier had rejected as "key findings" and mentioned 5 classes with no confirmed finding: 19 flags (the old counter said 0 because it did not know about verification status).
+- v0 (fix applied): all unconfirmed, so the summary is a fixed text from code (no VLM call): 0 flags.
+- v1: 5 flags: the summary says "10 confirmed findings" but lists/has 20 (1), and 4 assessments of confirmed findings mention a class with no confirmed finding ("corroded" on a tire, window frame and debris crop; "metal structure" on the hole crop).
+- Bug found while re-scoring: a first version of the counter treated the table prefix "F01:" of each assessment line as a citation and checked assessments of unconfirmed findings, giving a bogus 45 for v0 (30 cites + 15 class mentions) and 19 for v1. The counter was fixed, and both saved runs were re-scored with `rescore.py` (no model): v0 45 -> 0, v1 19 -> 5. The figures above are the corrected ones.
+Not checked: numbers, locations and sizes quoted in free text; omissions; whether severity is justified.
+
+### Runtime (RTX 5080 16 GB, per stage; `run_bus/metrics.md`)
+| stage | n | median s | p95 s |
+|---|---|---|---|
+| decode one stereo pair (CPU) | 198 | 0.007 | 0.008 |
+| rectify (CPU) | 198 | 0.002 | 0.005 |
+| OWLv2 detection, all 30 prompts, per frame (GPU, fp16) | 198 | 0.180 | 0.191 |
+| SGBM depth at 0.5 scale (CPU, ws1) | 177 | 0.021 | 0.028 |
+| locate + pose per frame | 177 | <0.001 | 0.001 |
+| VLM finding check, v0 crop only | 30 | 0.94 | - |
+| VLM finding check, v1 context (2 images) | 30 | 2.79 | 3.16 |
+| VLM summary (v1) | 1 | 8.97 | - |
+Model load: detector 7-64 s (64 s was first download), VLM 7-9 s. End to end for 198 keyframes: about 36 s detection + 4 s stereo + 85 s VLM (v1).
+
+Unit tests (no models): `python3 -m pytest tests` (19 pass on the laptop).
+`rescore.py` re-scores/re-renders saved outputs without a model: `python3 rescore.py --run run_bus_v1 --inputs run_bus --traj <tum>`.
